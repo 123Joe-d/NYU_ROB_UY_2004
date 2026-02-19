@@ -29,6 +29,7 @@ class ForwardKinematics(Node):
         self.joint_positions = None
         timer_period = 0.02  # publish FK information and marker at 50Hz
         self.timer = self.create_timer(timer_period, self.timer_callback)
+ 
 
         self.kp_publisher = self.create_publisher(Float64MultiArray, "/forward_kp_controller/commands", 10)
         self.kd_publisher = self.create_publisher(Float64MultiArray, "/forward_kd_controller/commands", 10)
@@ -70,8 +71,8 @@ class ForwardKinematics(Node):
         return np.array(
             [
                 [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
+                [0, np.cos(angle), -1*np.sin(angle), 0],
+                [0, np.sin(angle), np.cos(angle), 0],
                 [0, 0, 0, 1],
             ]
         )
@@ -80,9 +81,9 @@ class ForwardKinematics(Node):
         ## TODO: Implement the rotation matrix about the y-axis
         return np.array(
             [
-                [1, 0, 0, 0],
+                [np.cos(angle), 0, np.sin(angle), 0],
                 [0, 1, 0, 0],
-                [0, 0, 1, 0],
+                [-1*np.sin(angle), 0, np.cos(angle), 0],
                 [0, 0, 0, 1],
             ]
         )
@@ -91,8 +92,8 @@ class ForwardKinematics(Node):
         ## TODO: Implement the rotation matrix about the z-axis
         return np.array(
             [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
+                [np.cos(angle), -1*np.sin(angle), 0, 0],
+                [np.sin(angle), np.cos(angle), 0, 0],
                 [0, 0, 1, 0],
                 [0, 0, 0, 1],
             ]
@@ -102,9 +103,9 @@ class ForwardKinematics(Node):
         ## TODO: Implement the translation matrix
         return np.array(
             [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
+                [1, 0, 0, x],
+                [0, 1, 0, y],
+                [0, 0, 1, z],
                 [0, 0, 0, 1],
             ]
         )
@@ -113,33 +114,53 @@ class ForwardKinematics(Node):
     def forward_kinematics_f(self, theta1, theta2, theta3):
 
         # T_0_1 (base_link to leg_front_l_1)
-        T_0_1 = self.translation(0.07500, 0.0445, 0) @ self.rotation_x(1.57080) @ self.rotation_z(theta1)
+        T_0_1 = self.translation(0.0762, 0.0508, 0) @ self.rotation_x(-1.57080) @ self.rotation_z(theta1)
 
         # T_1_2 (leg_front_l_1 to leg_front_l_2)
         ## TODO: Implement the transformation matrix from leg_front_l_1 to leg_front_l_2
-        T_1_2 = self.translation(0, 0, 0) 
+        T_1_2 = self.translation(0, 0, 0.033) @ self.rotation_z(np.pi*0.25) @ self.rotation_y(theta2)
 
         # T_2_3 (leg_front_l_2 to leg_front_l_3)
         ## TODO: Implement the transformation matrix from leg_front_l_2 to leg_front_l_3
-        T_2_3 = self.translation(0, 0, 0) 
+        T_2_3 = self.translation(0.04, 0.078, 0) @ self.rotation_z(theta3)
 
         # T_3_ee (leg_front_l_3 to end-effector)
         ## TODO: Implement the transformation matrix from leg_front_l_3 to end effector
-        T_3_ee = self.translation(0, 0, 0) 
+        T_3_ee = self.translation(0.03, -0.08, 0.03) 
 
         # TODO: Compute the final transformation. T_0_ee is the multiplication of the previous transformation matrices
-        T_0_ee = T_0_1 
+        #T_0_ee = np.matmul(np.matmul(np.matmul(T_3_ee, T_2_3), T_1_2,), T_0_1) 
+        T_0_ee = T_0_1  @ T_1_2 @ T_2_3 @ T_3_ee
 
         # TODO: Extract the end-effector position. The end effector position is a 3x1 vector (not in homogenous coordinates)
-        end_effector_position = np.array([0,0,0])
+        end_effector_position = np.array([T_0_ee[0][3],T_0_ee[1][3],T_0_ee[2][3]])
 
         return end_effector_position
 
     # FK for back left leg
     def forward_kinematics_b(self, theta1, theta2, theta3):
 
+        # T_0_1 (base_link to leg_front_l_1)
+        T_0_1 = self.translation(-1*0.0762, 0.0508, 0) @ self.rotation_x(-1.57080) @ self.rotation_z(theta1)
+
+        # T_1_2 (leg_front_l_1 to leg_front_l_2)
+        ## TODO: Implement the transformation matrix from leg_front_l_1 to leg_front_l_2
+        T_1_2 = self.translation(0, 0, 0.033) @ self.rotation_z(np.pi*0.25) @ self.rotation_y(theta2)
+
+        # T_2_3 (leg_front_l_2 to leg_front_l_3)
+        ## TODO: Implement the transformation matrix from leg_front_l_2 to leg_front_l_3
+        T_2_3 = self.translation(0.04, 0.078, 0) @ self.rotation_z(theta3)
+
+        # T_3_ee (leg_front_l_3 to end-effector)
+        ## TODO: Implement the transformation matrix from leg_front_l_3 to end effector
+        T_3_ee = self.translation(0.03, -0.08, 0.03) 
+
+        # TODO: Compute the final transformation. T_0_ee is the multiplication of the previous transformation matrices
+        #T_0_ee = np.matmul(np.matmul(np.matmul(T_3_ee, T_2_3), T_1_2,), T_0_1) 
+        T_0_ee = T_0_1  @ T_1_2 @ T_2_3 @ T_3_ee
+
         ## TODO: Implement the FK for the back left leg, similar to forward_kinematics_f
-        end_effector_position = np.array([0,0,0])
+        end_effector_position = np.array([T_0_ee[0][3],T_0_ee[1][3],T_0_ee[2][3]])
 
         return end_effector_position
 
@@ -148,12 +169,12 @@ class ForwardKinematics(Node):
         """Timer callback for publishing end-effector marker and position."""
         if self.joint_positions is not None:
             # Joint angles
-            theta1_f = self.joint_positions[0] + 0
-            theta2_f = self.joint_positions[1] + 0
-            theta3_f = self.joint_positions[2] + 0
-            theta1_b = self.joint_positions[3] + 0
-            theta2_b = self.joint_positions[4] + 0
-            theta3_b = self.joint_positions[5] + 0
+            theta1_f = self.joint_positions[0] + 0.6271050262451172
+            theta2_f = (self.joint_positions[1] + 0.14304821014404295)
+            theta3_f = self.joint_positions[2] + 0.5448207473754882
+            theta1_b = self.joint_positions[3]  + 0.7777874755859375
+            theta2_b = self.joint_positions[4] + 0.12055118560791017
+            theta3_b = self.joint_positions[5] +0.5787725067138672
             end_effector_position_f = self.forward_kinematics_f(theta1_f, theta2_f, theta3_f)
             end_effector_position_b = self.forward_kinematics_b(theta1_b, theta2_b, theta3_b)
             
@@ -184,11 +205,29 @@ class ForwardKinematics(Node):
                 f"End-Effector Position: x={end_effector_position_f[0]:.2f}, y={end_effector_position_f[1]:.2f}, z={end_effector_position_f[2]:.2f}"
             )
 
+            dist = np.sqrt( (end_effector_position_f[0] - end_effector_position_b[0])**2 + 
+                           (end_effector_position_f[1] - end_effector_position_b[1])**2 + 
+                           (end_effector_position_f[2] - end_effector_position_b[2])**2 )
+            
+            if dist <= 0.07:
+                playing = sound.play()
+
+            print(theta1_f)
+            print(theta2_f)
+            print(theta3_f)
+            print()
+            print(theta1_b)
+            print(theta2_b)
+            print(theta3_b)
+            print("dist = ", dist)
+
 
 def main(args=None):
     rclpy.init(args=args)
     forward_kinematics = ForwardKinematics()
     rclpy.spin(forward_kinematics)
+
+    
 
 
 if __name__ == "__main__":
